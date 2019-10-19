@@ -1,0 +1,6 @@
+﻿@model Entities.Models.Emoji
+
+<div>
+    <img src="@Model.PathImage" alt="@Model.TypeEmoji.NameType" />
+    <input type="button" value="remove @Model.NameEmoji" id="btn-remove-emoji" onclick="removeEmoji('@Model.Id')" />
+</div>

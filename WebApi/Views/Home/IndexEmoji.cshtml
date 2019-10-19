@@ -1,0 +1,15 @@
+﻿@{
+    ViewBag.Title = "IndexEmoji";
+    var listEmoji = ViewBag.LIST as IList<Entities.Models.Emoji>;
+}
+
+<h2>IndexEmoji</h2>
+<table>
+    @foreach (var item in listEmoji)
+    {
+    <tr>
+        <th>@item.NameEmoji</th>
+        <th><img src="@item.PathImage" alt="@item.NameEmoji"></th>
+    </tr>
+    }
+</table>

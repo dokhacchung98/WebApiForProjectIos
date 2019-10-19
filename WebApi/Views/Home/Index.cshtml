@@ -1,0 +1,38 @@
+﻿@{
+    var listEmoji = ViewBag.LIST as List<Entities.Models.Emoji>;
+    var listTypeEmoji = ViewBag.LISTTYPE as List<Entities.Models.TypeEmoji>;
+}
+<div class="jumbotron">
+    <h1>ASP.NET</h1>
+    <p class="lead">ASP.NET is a free web framework for building great Web sites and Web applications using HTML, CSS, and JavaScript.</p>
+    <p><a href="https://asp.net" class="btn btn-primary btn-lg">Learn more &raquo;</a></p>
+</div>
+<h2>Type Emoji</h2>
+<div class="row">
+    <input type="text" placeholder="name" name="name" id="txt-name-type" />
+    <input type="text" name="pathEmoji" placeholder="path" id="txt-path-type" />
+    <input type="button" id="add-emoji" value="add emoji" onclick="addTypeEmoji()" />
+</div>
+
+<div class="row">
+    @foreach (var item in listTypeEmoji)
+    {
+        @Html.Partial("_PartialViewTypeEmoji", item)
+    }
+</div>
+
+
+<h2>Emoji</h2>
+<div class="row">
+    <input type="text" placeholder="name" name="character" id="txt-name" />
+    <input type="text" name="pathEmoji" placeholder="path" id="txt-path" />
+    <input type="text" name="idType" placeholder="Id Type" id="txt-type" />
+    <input type="button" id="add-emoji" value="add emoji" onclick="addEmoji()" />
+</div>
+
+<div class="row">
+    @foreach (var item in listEmoji)
+    {
+        @Html.Partial("_PartialViewEmoji", item)
+    }
+</div>
