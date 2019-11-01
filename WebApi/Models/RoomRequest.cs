@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Newtonsoft.Json;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Text;
@@ -10,9 +11,11 @@ namespace Entities.Models
     {
         public string Content { get; set; }
         public Guid RoomId { get; set; }
+        //[JsonIgnore]
         public ApplicationUser UserSend { get; set; }
         [ForeignKey("UserSend")]
         public string UserSendID { get; set; }
+        //[JsonIgnore]
         public ApplicationUser User { get; set; }
         [ForeignKey("User")]
         public string UserId { get; set; }

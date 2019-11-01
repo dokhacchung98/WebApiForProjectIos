@@ -229,10 +229,7 @@
     <Compile Include="Global.asax.cs">
       <DependentUpon>Global.asax</DependentUpon>
     </Compile>
-    <Compile Include="Migrations\201910191153151_ass.cs" />
-    <Compile Include="Migrations\201910191153151_ass.Designer.cs">
-      <DependentUpon>201910191153151_ass.cs</DependentUpon>
-    </Compile>
+    <Compile Include="Helper\LandingPage.cs" />
     <Compile Include="Migrations\Configuration.cs" />
     <Compile Include="ModelsFirebase\ContentChatFB.cs" />
     <Compile Include="ModelsFirebase\RoomRequestFB.cs" />
@@ -257,7 +254,10 @@
     <Compile Include="Results\ChallengeResult.cs" />
     <Compile Include="Startup.cs" />
     <Compile Include="ViewModels\AddRoomViewModel.cs" />
+    <Compile Include="ViewModels\BlockUserModel.cs" />
     <Compile Include="ViewModels\ContentChatViewModel.cs" />
+    <Compile Include="ViewModels\FriendModel.cs" />
+    <Compile Include="ViewModels\PagingParameterModel.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="Areas\HelpPage\HelpPage.css" />
@@ -350,11 +350,6 @@
     <None Include="packages.config" />
     <Content Include="Scripts\jquery-3.3.1.slim.min.map" />
     <Content Include="Scripts\jquery-3.3.1.min.map" />
-  </ItemGroup>
-  <ItemGroup>
-    <EmbeddedResource Include="Migrations\201910191153151_ass.resx">
-      <DependentUpon>201910191153151_ass.cs</DependentUpon>
-    </EmbeddedResource>
   </ItemGroup>
   <PropertyGroup>
     <VisualStudioVersion Condition="'$(VisualStudioVersion)' == ''">10.0</VisualStudioVersion>

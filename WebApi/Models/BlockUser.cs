@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Newtonsoft.Json;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Text;
@@ -10,10 +11,12 @@ namespace Entities.Models
     {
         [ForeignKey("User")]
         public string UserID { get; set; }
+        //[JsonIgnore]
         public virtual ApplicationUser User { get; set; }
 
         [ForeignKey("UserBlock")]
         public string UserBlockId { get; set; }
+        //[JsonIgnore]
         public virtual ApplicationUser UserBlock { get; set; }
     }
 }

@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Newtonsoft.Json;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Text;
@@ -10,7 +11,9 @@ namespace Entities.Models
     {
         public string NameEmoji { get; set; }
         public string PathImage { get; set; }
+        [JsonIgnore]
         public virtual ICollection<ContentChat> ContentChats { get; set; }
+        //[JsonIgnore]
         public virtual TypeEmoji TypeEmoji { get; set; }
         [ForeignKey("TypeEmoji")]
         public Guid IdType { get; set; }

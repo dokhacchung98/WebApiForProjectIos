@@ -10,6 +10,8 @@ using Firebase.Database;
 using Firebase.Database.Query;
 using WebApi.ModelsFirebase;
 using WebApi.ViewModels;
+using System.Web;
+using Newtonsoft.Json;
 
 namespace WebApi.Controllers
 {
@@ -17,11 +19,11 @@ namespace WebApi.Controllers
     [Authorize]
     public class MyController : ApiController
     {
-        private MyDbContext context;
-        private FirebaseClient firebaseClient;
-        private static string FRIEND_REQUEST = "friend_request";
-        private static string ROOM_REQUEST = "room_request";
-        private static string ROOM = "room";
+        private readonly MyDbContext context;
+        private readonly FirebaseClient firebaseClient;
+        private static readonly string FRIEND_REQUEST = "friend_request";
+        private static readonly string ROOM_REQUEST = "room_request";
+        private static readonly string ROOM = "room";
 
         public MyController()
         {
@@ -29,7 +31,7 @@ namespace WebApi.Controllers
             firebaseClient = new FirebaseClient("https://luu-data.firebaseio.com/");
         }
 
-        #region user
+        #region User
         [HttpPost]
         [Route("UpdateInfomation")]
         public async Task<IHttpActionResult> UpdateInfomation(InfomationUerModel userModel)
@@ -75,33 +77,90 @@ namespace WebApi.Controllers
 
         [Route("FindUserByName")]
         [HttpGet]
-        public async Task<ICollection<ApplicationUser>> FindUserByName(string name)
+        public ICollection<ApplicationUser> FindUserByName([FromUri]PagingParameterModel pagingParameterModel, string name)
         {
             ICollection<ApplicationUser> listUser =
             context.Users.ToList().Where(t => t.FullName.ToLower().Contains(name.ToLower())).ToList();
-            return listUser;
+            int count = listUser.Count();
+
+            int CurrentPage = pagingParameterModel.pageNumber;
+
+            int PageSize = pagingParameterModel.pageSize;
+
+            int TotalCount = count;
+
+            int TotalPages = (int)Math.Ceiling(count / (double)PageSize);
+
+            var items = listUser.Skip((CurrentPage - 1) * PageSize).Take(PageSize).ToList();
+
+            var previousPage = CurrentPage > 1 ? "1" : "0";
+
+            var nextPage = CurrentPage < TotalPages ? "1" : "0";
+
+            var paginationMetadata = new
+            {
+                totalCount = TotalCount,
+                pageSize = PageSize,
+                currentPage = CurrentPage,
+                totalPages = TotalPages,
+                previousPage,
+                nextPage
+            };
+            HttpContext.Current.Response.Headers.Add("Paging-Headers", JsonConvert.SerializeObject(paginationMetadata));
+
+            return items;
         }
 
-        public async Task<ICollection<ApplicationUser>> GetListUser()
+        [Route("GetListUser")]
+        [HttpGet]
+        public ICollection<ApplicationUser> GetListUser([FromUri]PagingParameterModel pagingparametermodel)
         {
-            Random rnd = new Random();
-            return context.Users.OrderBy(t => rnd.Next()).ToList();
+            var list = context.Users.OrderBy(t => t.FullName).ToList();
+
+            int count = list.Count();
+
+            int CurrentPage = pagingparametermodel.pageNumber;
+
+            int PageSize = pagingparametermodel.pageSize;
+
+            int TotalCount = count;
+
+            int TotalPages = (int)Math.Ceiling(count / (double)PageSize);
+
+            var items = list.Skip((CurrentPage - 1) * PageSize).Take(PageSize).ToList();
+
+            var previousPage = CurrentPage > 1 ? "1" : "0";
+
+            var nextPage = CurrentPage < TotalPages ? "1" : "0";
+
+            var paginationMetadata = new
+            {
+                totalCount = TotalCount,
+                pageSize = PageSize,
+                currentPage = CurrentPage,
+                totalPages = TotalPages,
+                previousPage,
+                nextPage
+            };
+            HttpContext.Current.Response.Headers.Add("Paging-Headers", JsonConvert.SerializeObject(paginationMetadata));
+
+            return items;
         }
         #endregion
 
-        #region friend request
+        #region Friend Request
         [Route("SendFriendRequest")]
         [HttpPost]
         public async Task<IHttpActionResult> SendFriendRequest(FriendRequest friendRequest)
         {
             //kiểm tra đã gửi chưa
-            var haveSend = context.FriendRequests.FirstOrDefault(t => t.UserSend == friendRequest.UserSend && t.UserId == friendRequest.UserId);
+            var haveSend = context.FriendRequests.FirstOrDefault(t => t.UserSend.Equals(friendRequest.UserSend) && t.UserId.Equals(friendRequest.UserId));
             if (haveSend != null)
             {
                 return BadRequest("already send");
             }
             //kiểm tra người kia có phải đã gửi lời mời trước rồi ko, nếu có => đồng ý
-            var userSend = context.FriendRequests.FirstOrDefault(t => t.UserSend == friendRequest.UserId && t.UserId == friendRequest.UserSend);
+            var userSend = context.FriendRequests.FirstOrDefault(t => t.UserSend.Equals(friendRequest.UserId) && t.UserId.Equals(friendRequest.UserSend));
             if (userSend != null)
             {
                 await ReplyFriendRequest(userSend.Id, true);
@@ -117,23 +176,19 @@ namespace WebApi.Controllers
                 Content = friendRequest.Content,
                 TimeSend = DateTime.UtcNow.ToString("MM/dd/yyyy HH:mm:ss")
             };
-            var result = firebaseClient
+
+            await firebaseClient
                 .Child(FRIEND_REQUEST)
                 .Child(friendRequest.Id.ToString())
                 .PutAsync(friendRequestFB);
-
-            if (!result.IsCompleted)
-            {
-                return BadRequest();
-            }
 
             await context.SaveChangesAsync();
             return Ok();
         }
 
         [Route("DeleteFriendRequest")]
-        [HttpPost]
-        public async Task<IHttpActionResult> DeleteFriendRequest([FromBody]Guid id)
+        [HttpGet]
+        public async Task<IHttpActionResult> DeleteFriendRequest([FromUri]Guid id)
         {
             var fRequest = context.FriendRequests.FirstOrDefault(t => t.Id == id);
             if (fRequest != null)
@@ -143,10 +198,6 @@ namespace WebApi.Controllers
                  .DeleteAsync();
                 context.FriendRequests.Remove(fRequest);
                 await context.SaveChangesAsync();
-                await firebaseClient
-                    .Child(FRIEND_REQUEST)
-                    .Child(fRequest.Id.ToString())
-                    .DeleteAsync();
             }
             return Ok();
         }
@@ -162,13 +213,47 @@ namespace WebApi.Controllers
             }
             if (isAccept)
             {
-                await AddFriend(fr.UserSend, fr.UserId);
+                await AddFriend(new FriendModel() { IdUser1 = fr.UserSend, IdUser2 = fr.UserId });
             }
             await DeleteFriendRequest(fr.Id);
             await context.SaveChangesAsync();
             return Ok();
         }
 
+        [HttpGet]
+        [Route("GetFriendRequest")]
+        public FriendRequest GetFriendRequest(Guid id)
+        {
+            return context.FriendRequests.Find(id);
+        }
+
+        [HttpGet]
+        [Route("GetAllFriendRequest")]
+        public IList<FriendRequest> GetAllFriendRequest([FromUri]PagingParameterModel pagingParameterModel, string id)
+        {
+            var list = context.FriendRequests.Where(t => t.UserId.Equals(id)).ToList();
+
+            int count = list.Count();
+            int CurrentPage = pagingParameterModel.pageNumber;
+            int PageSize = pagingParameterModel.pageSize;
+            int TotalCount = count;
+            int TotalPages = (int)Math.Ceiling(count / (double)PageSize);
+            var items = list.Skip((CurrentPage - 1) * PageSize).Take(PageSize).ToList();
+            var previousPage = CurrentPage > 1 ? "1" : "0";
+            var nextPage = CurrentPage < TotalPages ? "1" : "0";
+            var paginationMetadata = new
+            {
+                totalCount = TotalCount,
+                pageSize = PageSize,
+                currentPage = CurrentPage,
+                totalPages = TotalPages,
+                previousPage,
+                nextPage
+            };
+            HttpContext.Current.Response.Headers.Add("Paging-Headers", JsonConvert.SerializeObject(paginationMetadata));
+
+            return items;
+        }
         #endregion
 
         #region Room
@@ -318,7 +403,7 @@ namespace WebApi.Controllers
 
         [AllowAnonymous]
         [Route("GetEmoji")]
-        public async Task<Emoji> GetEmoji(string character)
+        public Emoji GetEmoji(string character)
         {
             Emoji emoji = context.Emoji.FirstOrDefault(t => t.NameEmoji.ToLower().Equals(character.ToLower()));
             return emoji;
@@ -326,24 +411,97 @@ namespace WebApi.Controllers
 
         [AllowAnonymous]
         [Route("GetAllEmoji")]
-        public async Task<List<Emoji>> GetAllEmoji()
+        public List<Emoji> GetAllEmoji([FromUri]PagingParameterModel pagingParameterModel)
         {
             List<Emoji> emojis = context.Emoji.ToList();
-            return emojis;
+            int count = emojis.Count();
+
+            int CurrentPage = pagingParameterModel.pageNumber;
+
+            int PageSize = pagingParameterModel.pageSize;
+
+            int TotalCount = count;
+
+            int TotalPages = (int)Math.Ceiling(count / (double)PageSize);
+
+            var items = emojis.Skip((CurrentPage - 1) * PageSize).Take(PageSize).ToList();
+
+            var previousPage = CurrentPage > 1 ? "1" : "0";
+
+            var nextPage = CurrentPage < TotalPages ? "1" : "0";
+
+            var paginationMetadata = new
+            {
+                totalCount = TotalCount,
+                pageSize = PageSize,
+                currentPage = CurrentPage,
+                totalPages = TotalPages,
+                previousPage,
+                nextPage
+            };
+            HttpContext.Current.Response.Headers.Add("Paging-Headers", JsonConvert.SerializeObject(paginationMetadata));
+
+            return items;
         }
+
+        [AllowAnonymous]
+        [HttpGet]
+        [Route("GetTypeEmoji")]
+        public IList<TypeEmoji> GetTypeEmoji()
+        {
+            return context.TypeEmojis.ToList();
+        }
+
+        [AllowAnonymous]
+        [Route("GetEmojiByType")]
+        [HttpGet]
+        public IList<Emoji> GetEmojiByType([FromUri]PagingParameterModel pagingParameterModel, Guid id)
+        {
+            var list = context.Emoji.Where(t => t.IdType == id).ToList();
+            int count = list.Count();
+
+            int CurrentPage = pagingParameterModel.pageNumber;
+
+            int PageSize = pagingParameterModel.pageSize;
+
+            int TotalCount = count;
+
+            int TotalPages = (int)Math.Ceiling(count / (double)PageSize);
+
+            var items = list.Skip((CurrentPage - 1) * PageSize).Take(PageSize).ToList();
+
+            var previousPage = CurrentPage > 1 ? "1" : "0";
+
+            var nextPage = CurrentPage < TotalPages ? "1" : "0";
+
+            var paginationMetadata = new
+            {
+                totalCount = TotalCount,
+                pageSize = PageSize,
+                currentPage = CurrentPage,
+                totalPages = TotalPages,
+                previousPage,
+                nextPage
+            };
+            HttpContext.Current.Response.Headers.Add("Paging-Headers", JsonConvert.SerializeObject(paginationMetadata));
+
+            return items;
+        }
+
         #endregion
 
         #region Block User
         [Route("BlockUser")]
-        public async Task<IHttpActionResult> BlockUser(string idFromUser, string idUserBlock)
+        [HttpPost]
+        public async Task<IHttpActionResult> BlockUser(BlockUserModel blockUserModel)
         {
-            var blockUser = context.BlockUsers.FirstOrDefault(t => t.UserID.Equals(idFromUser) && t.UserBlockId.Equals(idUserBlock));
+            var blockUser = context.BlockUsers.FirstOrDefault(t => t.UserID.Equals(blockUserModel.IdFromUser) && t.UserBlockId.Equals(blockUserModel.IdUserBlock));
             if (blockUser == null)
             {
                 BlockUser block = new BlockUser()
                 {
-                    UserID = idFromUser,
-                    UserBlockId = idUserBlock
+                    UserID = blockUserModel.IdFromUser,
+                    UserBlockId = blockUserModel.IdUserBlock
                 };
                 context.BlockUsers.Add(block);
                 await context.SaveChangesAsync();
@@ -352,9 +510,10 @@ namespace WebApi.Controllers
         }
 
         [Route("RemoveBlockUser")]
-        public async Task<IHttpActionResult> RemoveBlockUser(string idFromUser, string idUserBlock)
+        [HttpPost]
+        public async Task<IHttpActionResult> RemoveBlockUser(BlockUserModel blockUserModel)
         {
-            var blockUser = context.BlockUsers.FirstOrDefault(t => t.UserID.Equals(idFromUser) && t.UserBlockId.Equals(idUserBlock));
+            var blockUser = context.BlockUsers.FirstOrDefault(t => t.UserID.Equals(blockUserModel.IdFromUser) && t.UserBlockId.Equals(blockUserModel.IdUserBlock));
             if (blockUser != null)
             {
                 context.BlockUsers.Remove(blockUser);
@@ -365,29 +524,67 @@ namespace WebApi.Controllers
 
         [Route("GetAllBlockByIdUser")]
         [HttpGet]
-        public async Task<IList<BlockUser>> GetAllBlockByIdUser(string id)
+        public IList<BlockUser> GetAllBlockByIdUser([FromUri]PagingParameterModel pagingParameterModel, string id)
         {
             var listBlock = context.BlockUsers.Where(t => t.UserID.Equals(id)).ToList();
-            return listBlock;
+            int count = listBlock.Count();
+
+            int CurrentPage = pagingParameterModel.pageNumber;
+
+            int PageSize = pagingParameterModel.pageSize;
+
+            int TotalCount = count;
+
+            int TotalPages = (int)Math.Ceiling(count / (double)PageSize);
+
+            var items = listBlock.Skip((CurrentPage - 1) * PageSize).Take(PageSize).ToList();
+
+            var previousPage = CurrentPage > 1 ? "1" : "0";
+
+            var nextPage = CurrentPage < TotalPages ? "1" : "0";
+
+            var paginationMetadata = new
+            {
+                totalCount = TotalCount,
+                pageSize = PageSize,
+                currentPage = CurrentPage,
+                totalPages = TotalPages,
+                previousPage,
+                nextPage
+            };
+            HttpContext.Current.Response.Headers.Add("Paging-Headers", JsonConvert.SerializeObject(paginationMetadata));
+
+            return items;
         }
         #endregion
 
         #region Friend
         [Route("AddFriend")]
-        public async Task<IHttpActionResult> AddFriend(string idUser1, string idUser2)
+        [HttpPost]
+        public async Task<IHttpActionResult> AddFriend(FriendModel friendModel)
         {
-            var userExist = context.Friends.FirstOrDefault(t => (t.User1Id.Equals(idUser1) && t.User2Id.Equals(idUser2))
-            || (t.User1Id.Equals(idUser2) && t.User2Id.Equals(idUser1)));
+            var userExist = context.Friends.FirstOrDefault(t => (t.User1Id.Equals(friendModel.IdUser1) && t.User2Id.Equals(friendModel.IdUser2))
+            || (t.User1Id.Equals(friendModel.IdUser2) && t.User2Id.Equals(friendModel.IdUser1)));
             if (userExist == null)
             {
                 var friend = new Friend()
                 {
-                    User1Id = idUser1,
-                    User2Id = idUser2,
-                    LastInterractive = DateTime.Now
+                    User1Id = friendModel.IdUser1,
+                    User2Id = friendModel.IdUser2
                 };
                 context.Friends.Add(friend);
+
+                Room room = new Room()
+                {
+                    ColorRoom = "blue",
+                    StickerRoom = "like",
+                    PathAvatar = "",
+                    NameRoom = ""
+                };
+                context.Rooms.Add(room);
                 await context.SaveChangesAsync();
+                await AddUserToRoom(friendModel.IdUser1, room.Id);
+                await AddUserToRoom(friendModel.IdUser2, room.Id);
             }
             return Ok();
         }
@@ -410,11 +607,38 @@ namespace WebApi.Controllers
 
         [Route("GetAllFriend")]
         [HttpGet]
-        public async Task<IList<Friend>> GetAllFriend(string idUser)
+        public IList<Friend> GetAllFriend([FromUri]PagingParameterModel pagingParameterModel, string idUser)
         {
             var friends = context.Friends
                 .Where(t => t.User1Id.Equals(idUser) || t.User2.Equals(idUser)).ToList();
-            return friends;
+            int count = friends.Count();
+
+            int CurrentPage = pagingParameterModel.pageNumber;
+
+            int PageSize = pagingParameterModel.pageSize;
+
+            int TotalCount = count;
+
+            int TotalPages = (int)Math.Ceiling(count / (double)PageSize);
+
+            var items = friends.Skip((CurrentPage - 1) * PageSize).Take(PageSize).ToList();
+
+            var previousPage = CurrentPage > 1 ? "1" : "0";
+
+            var nextPage = CurrentPage < TotalPages ? "1" : "0";
+
+            var paginationMetadata = new
+            {
+                totalCount = TotalCount,
+                pageSize = PageSize,
+                currentPage = CurrentPage,
+                totalPages = TotalPages,
+                previousPage,
+                nextPage
+            };
+            HttpContext.Current.Response.Headers.Add("Paging-Headers", JsonConvert.SerializeObject(paginationMetadata));
+
+            return items;
         }
         #endregion
 
@@ -433,7 +657,6 @@ namespace WebApi.Controllers
                     Content = content
                 };
                 context.RoomRequests.Add(rq);
-                await context.SaveChangesAsync();
 
                 var rqbf = new RoomRequestFB()
                 {
@@ -443,10 +666,11 @@ namespace WebApi.Controllers
                     Content = rq.Content,
                     TimeSend = DateTime.UtcNow.ToString("mm/dd/yyyy hh:mm:ss")
                 };
-                var result = firebaseClient
+                await firebaseClient
                     .Child(ROOM_REQUEST)
                     .Child(rq.Id.ToString())
                     .PutAsync(rqbf);
+                await context.SaveChangesAsync();
             }
             return Ok();
         }
@@ -459,20 +683,47 @@ namespace WebApi.Controllers
             if (rq != null)
             {
                 context.RoomRequests.Remove(rq);
-                await context.SaveChangesAsync();
                 await firebaseClient.Child(ROOM_REQUEST)
                                             .Child(rq.Id.ToString())
                                             .DeleteAsync();
+                await context.SaveChangesAsync();
             }
             return Ok();
         }
 
         [Route("GetAllRoomRequest")]
         [HttpGet]
-        public async Task<IList<RoomRequest>> GetAllRoomRequest(string id)
+        public IList<RoomRequest> GetAllRoomRequest([FromUri]PagingParameterModel pagingParameterModel, string id)
         {
             var listRoomRequest = context.RoomRequests.Where(t => t.UserId.Equals(id)).ToList();
-            return listRoomRequest;
+            int count = listRoomRequest.Count();
+
+            int CurrentPage = pagingParameterModel.pageNumber;
+
+            int PageSize = pagingParameterModel.pageSize;
+
+            int TotalCount = count;
+
+            int TotalPages = (int)Math.Ceiling(count / (double)PageSize);
+
+            var items = listRoomRequest.Skip((CurrentPage - 1) * PageSize).Take(PageSize).ToList();
+
+            var previousPage = CurrentPage > 1 ? "1" : "0";
+
+            var nextPage = CurrentPage < TotalPages ? "1" : "0";
+
+            var paginationMetadata = new
+            {
+                totalCount = TotalCount,
+                pageSize = PageSize,
+                currentPage = CurrentPage,
+                totalPages = TotalPages,
+                previousPage,
+                nextPage
+            };
+            HttpContext.Current.Response.Headers.Add("Paging-Headers", JsonConvert.SerializeObject(paginationMetadata));
+
+            return items;
         }
         #endregion
 
@@ -489,7 +740,8 @@ namespace WebApi.Controllers
                 {
                     UserId = idUser,
                     RoomId = idRoom,
-                    NickName = user.FullName
+                    NickName = user.FullName,
+                    LastInterractive = DateTime.Now
                 };
                 context.UserJoinRooms.Add(userJoinRoom);
                 await context.SaveChangesAsync();
@@ -510,10 +762,9 @@ namespace WebApi.Controllers
             return Ok();
         }
 
-
         [Route("GetListAvatarRoom")]
         [HttpGet]
-        public IList<string> GetListAvatarRoom(Guid idRoom)
+        public IList<string> GetListAvatarRoom([FromUri]PagingParameterModel pagingParameterModel, Guid idRoom)
         {
             var room = context.Rooms.Find(idRoom);
             var list = new List<string>();
@@ -530,12 +781,40 @@ namespace WebApi.Controllers
                     list.Add(u.Avatar);
                 }
             }
-            return list;
+
+            int count = list.Count();
+
+            int CurrentPage = pagingParameterModel.pageNumber;
+
+            int PageSize = pagingParameterModel.pageSize;
+
+            int TotalCount = count;
+
+            int TotalPages = (int)Math.Ceiling(count / (double)PageSize);
+
+            var items = list.Skip((CurrentPage - 1) * PageSize).Take(PageSize).ToList();
+
+            var previousPage = CurrentPage > 1 ? "1" : "0";
+
+            var nextPage = CurrentPage < TotalPages ? "1" : "0";
+
+            var paginationMetadata = new
+            {
+                totalCount = TotalCount,
+                pageSize = PageSize,
+                currentPage = CurrentPage,
+                totalPages = TotalPages,
+                previousPage,
+                nextPage
+            };
+            HttpContext.Current.Response.Headers.Add("Paging-Headers", JsonConvert.SerializeObject(paginationMetadata));
+
+            return items;
         }
 
         [Route("GetListUserJoinRoom")]
         [HttpGet]
-        public IList<ApplicationUser> GetListUserJoinRoom(Guid idRoom)
+        public IList<ApplicationUser> GetListUserJoinRoom([FromUri]PagingParameterModel pagingParameterModel, Guid idRoom)
         {
             var listUser = new List<ApplicationUser>();
             var listJoinRoom = context.UserJoinRooms.Where(t => t.RoomId == idRoom).Select(t => t.UserId).ToList();
@@ -544,7 +823,34 @@ namespace WebApi.Controllers
                 var u = context.Users.Find(item);
                 listUser.Add(u);
             }
-            return listUser;
+            int count = listUser.Count();
+
+            int CurrentPage = pagingParameterModel.pageNumber;
+
+            int PageSize = pagingParameterModel.pageSize;
+
+            int TotalCount = count;
+
+            int TotalPages = (int)Math.Ceiling(count / (double)PageSize);
+
+            var items = listUser.Skip((CurrentPage - 1) * PageSize).Take(PageSize).ToList();
+
+            var previousPage = CurrentPage > 1 ? "1" : "0";
+
+            var nextPage = CurrentPage < TotalPages ? "1" : "0";
+
+            var paginationMetadata = new
+            {
+                totalCount = TotalCount,
+                pageSize = PageSize,
+                currentPage = CurrentPage,
+                totalPages = TotalPages,
+                previousPage,
+                nextPage
+            };
+            HttpContext.Current.Response.Headers.Add("Paging-Headers", JsonConvert.SerializeObject(paginationMetadata));
+
+            return items;
         }
         #endregion
 
@@ -555,29 +861,23 @@ namespace WebApi.Controllers
         {
             var contentChat = new ContentChat()
             {
-                ContentText = contentChatViewModel.ContentText,
-                Type = contentChatViewModel.Type,
                 EmojiId = contentChatViewModel.EmojiId,
                 RoomId = contentChatViewModel.RoomId,
                 UserId = contentChatViewModel.UserId,
-                PathAudio = contentChatViewModel.PathAudio,
-                PathFilde = contentChatViewModel.PathFilde,
-                PathImage = contentChatViewModel.PathImage,
-                PathVideo = contentChatViewModel.PathVideo,
                 TimeChat = DateTime.Now
             };
 
             var ccfb = new ContentChatFB()
             {
                 Id = contentChat.Id.ToString(),
-                ContentText = contentChat.ContentText,
-                Type = contentChat.Type,
+                ContentText = contentChatViewModel.ContentText,
+                Type = contentChatViewModel.Type,
                 EmojiId = contentChat.EmojiId.ToString(),
                 UserId = contentChat.UserId,
-                PathAudio = contentChat.PathAudio,
-                PathFilde = contentChat.PathFilde,
-                PathImage = contentChat.PathImage,
-                PathVideo = contentChat.PathVideo,
+                PathAudio = contentChatViewModel.PathAudio,
+                PathFilde = contentChatViewModel.PathFilde,
+                PathImage = contentChatViewModel.PathImage,
+                PathVideo = contentChatViewModel.PathVideo,
                 TimeChat = DateTime.UtcNow.ToString("MM/dd/yyyy HH:mm:ss")
             };
 
@@ -587,8 +887,64 @@ namespace WebApi.Controllers
                                 .PutAsync(ccfb);
 
             context.ContentChats.Add(contentChat);
+
+            var listJoin = context.UserJoinRooms.Where(t => t.RoomId == contentChatViewModel.RoomId).ToList();
+            foreach (var item in listJoin)
+            {
+                item.LastInterractive = DateTime.Now;
+            }
+
             await context.SaveChangesAsync();
             return Ok();
+        }
+
+        [HttpGet]
+        [Route("GetMessage")]
+        public async Task<IList<ContentChatViewModel>> GetMessage([FromUri]PagingParameterModel pagingParameterModel, Guid idRoom)
+        {
+            var listMessage = context.ContentChats.Where(t => t.RoomId == idRoom).OrderBy(t => t.TimeChat).ToList();
+            int count = listMessage.Count();
+            int CurrentPage = pagingParameterModel.pageNumber;
+            int PageSize = pagingParameterModel.pageSize;
+            int TotalCount = count;
+            int TotalPages = (int)Math.Ceiling(count / (double)PageSize);
+            var items = listMessage.Skip((CurrentPage - 1) * PageSize).Take(PageSize).ToList();
+            var previousPage = CurrentPage > 1 ? "1" : "0";
+            var nextPage = CurrentPage < TotalPages ? "1" : "0";
+            var paginationMetadata = new
+            {
+                totalCount = TotalCount,
+                pageSize = PageSize,
+                currentPage = CurrentPage,
+                totalPages = TotalPages,
+                previousPage,
+                nextPage
+            };
+            HttpContext.Current.Response.Headers.Add("Paging-Headers", JsonConvert.SerializeObject(paginationMetadata));
+            var result = new List<ContentChatViewModel>();
+            foreach (var t in items)
+            {
+                var chat = await firebaseClient.Child(ROOM)
+                                                         .Child(idRoom.ToString())
+                                                         .Child(t.Id.ToString())
+                                                         .OnceAsync<ContentChatFB>() as ContentChatFB;
+                var chatModel = new ContentChatViewModel()
+                {
+                    EmojiId = chat.EmojiId == null ? new Guid("") : Guid.Parse(chat.EmojiId),
+                    ContentText = chat.ContentText,
+                    PathAudio = chat.PathAudio,
+                    PathFilde = chat.PathFilde,
+                    PathImage = chat.PathImage,
+                    PathVideo = chat.PathVideo,
+                    RoomId = idRoom,
+                    Type = chat.Type,
+                    UserId = chat.UserId
+                };
+                result.Add(chatModel);
+            }
+
+            return result;
+
         }
         #endregion
     }

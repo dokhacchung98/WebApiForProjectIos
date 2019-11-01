@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Newtonsoft.Json;
+using System;
 using System.Collections.Generic;
 using System.Text;
 using WebApi.Models;
@@ -13,8 +14,9 @@ namespace Entities.Models
         public string KeyCall { get; set; }
         public string NameRoom { get; set; }
         public string PathAvatar { get; set; }
-
+        [JsonIgnore]
         public virtual ICollection<UserJoinRoom> UserJoinRooms { get; set; }
+        [JsonIgnore]
         public virtual ICollection<ContentChat> ContentChats { get; set; }
     }
 }

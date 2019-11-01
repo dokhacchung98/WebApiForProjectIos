@@ -1,4 +1,5 @@
 ﻿using Entities.Models;
+using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -10,24 +11,21 @@ namespace Entities.Models
 {
     public class ContentChat : BaseEntity
     {
-        public string ContentText { get; set; }
-        public int Type { get; set; }
-        public string PathImage { get; set; }
-        public string PathVideo { get; set; }
-        public string PathFilde { get; set; }
-        public string PathAudio { get; set; }
         public DateTime TimeChat { get; set; }
 
         [ForeignKey("Emoji")]
         public Guid? EmojiId { get; set; }
+        //[JsonIgnore]
         public virtual Emoji Emoji { get; set; }
 
         [ForeignKey("Room")]
         public Guid RoomId { get; set; }
+        //[JsonIgnore]
         public virtual Room Room { get; set; }
 
         [ForeignKey("User")]
         public string UserId { get; set; }
+        //[JsonIgnore]
         public virtual ApplicationUser User { get; set; }
     }
 }
