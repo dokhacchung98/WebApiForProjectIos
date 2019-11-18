@@ -15,6 +15,10 @@ namespace WebApi.Models
     // You can add profile data for the user by adding more properties to your ApplicationUser class, please visit https://go.microsoft.com/fwlink/?LinkID=317594 to learn more.
     public class ApplicationUser : IdentityUser
     {
+        public ApplicationUser() : base()
+        {
+            isFriend = false;
+        }
         public string Avatar { get; set; }
 
         public string Wallpaper { get; set; }
@@ -26,6 +30,7 @@ namespace WebApi.Models
         public DateTime? DoB { get; set; }
 
         public string Phone { get; set; }
+        public bool isFriend { get; set; }
         [JsonIgnore]
         public virtual ICollection<ContentChat> ContentChats { get; set; }
         [JsonIgnore]

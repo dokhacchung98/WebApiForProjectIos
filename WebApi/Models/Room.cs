@@ -13,8 +13,10 @@ namespace Entities.Models
         public string KeyVideoCall { get; set; }
         public string KeyCall { get; set; }
         public string NameRoom { get; set; }
+        public bool IsChatGroup { get; set; }
+        public string LastContent { get; set; }
         public string PathAvatar { get; set; }
-        [JsonIgnore]
+        //[JsonIgnore]
         public virtual ICollection<UserJoinRoom> UserJoinRooms { get; set; }
         [JsonIgnore]
         public virtual ICollection<ContentChat> ContentChats { get; set; }

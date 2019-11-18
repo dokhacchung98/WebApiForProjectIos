@@ -13,7 +13,7 @@ namespace Entities.Models
         public string PathImage { get; set; }
         [JsonIgnore]
         public virtual ICollection<ContentChat> ContentChats { get; set; }
-        //[JsonIgnore]
+        [JsonIgnore]
         public virtual TypeEmoji TypeEmoji { get; set; }
         [ForeignKey("TypeEmoji")]
         public Guid IdType { get; set; }

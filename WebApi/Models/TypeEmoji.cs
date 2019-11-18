@@ -10,7 +10,7 @@ namespace Entities.Models
     {
         public string NameType { get; set; }
         public string PathThumbnail { get; set; }
-        [JsonIgnore]
+        //[JsonIgnore]
         public virtual ICollection<Emoji> Emojis { get; set; }
     }
 }
