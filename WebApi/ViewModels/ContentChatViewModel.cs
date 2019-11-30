@@ -15,6 +15,5 @@ namespace WebApi.ViewModels
         public string PathAudio { get; set; }
         public Guid? EmojiId { get; set; }
         public Guid RoomId { get; set; }
-        public string UserId { get; set; }
     }
 }

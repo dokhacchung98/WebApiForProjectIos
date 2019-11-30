@@ -181,27 +181,28 @@ namespace WebApi.Controllers
         #region Friend Request
         [Route("SendFriendRequest")]
         [HttpPost]
-        public async Task<IHttpActionResult> SendFriendRequest([FromBody]string IdUser)
+        public async Task<IHttpActionResult> SendFriendRequest([FromBody]SendFriendRequestViewModel model)
         {
             var myUser = GetUserLogin();
 
             //kiểm tra đã gửi chưa
-            var haveSend = context.FriendRequests.FirstOrDefault(t => t.UserSend.Equals(myUser.Id) && t.UserId.Equals(IdUser));
+            var haveSend = context.FriendRequests.FirstOrDefault(t => t.UserSend.Equals(myUser.Id) && t.UserId.Equals(model.IdUser));
             if (haveSend != null)
             {
                 return BadRequest("already send");
             }
             //kiểm tra người kia có phải đã gửi lời mời trước rồi ko, nếu có => đồng ý
-            var userSend = context.FriendRequests.FirstOrDefault(t => t.UserSend.Equals(IdUser) && t.UserId.Equals(myUser.Id));
+            var userSend = context.FriendRequests.FirstOrDefault(t => t.UserSend.Equals(model.IdUser) && t.UserId.Equals(myUser.Id));
             if (userSend != null)
             {
-                await ReplyFriendRequest(userSend.Id, true);
+                await ReplyFriendRequest(new ReplyFriendRequestViewModel() { IdFriendRequest = userSend.Id, IsAccept = true });
+                return Ok();
             }
 
             var friendRequest = new FriendRequest()
             {
                 UserSend = myUser.Id,
-                UserId = IdUser,
+                UserId = model.IdUser,
                 Content = "Hello"
             };
             context.FriendRequests.Add(friendRequest);
@@ -241,14 +242,14 @@ namespace WebApi.Controllers
 
         [Route("ReplyFriendRequest")]
         [HttpPost]
-        public async Task<IHttpActionResult> ReplyFriendRequest([FromBody]Guid idFriendRequest, [FromBody] bool isAccept)
+        public async Task<IHttpActionResult> ReplyFriendRequest([FromBody]ReplyFriendRequestViewModel model)
         {
-            var fr = context.FriendRequests.FirstOrDefault(t => t.Id == idFriendRequest);
+            var fr = context.FriendRequests.Find(model.IdFriendRequest);
             if (fr == null)
             {
                 return NotFound();
             }
-            if (isAccept)
+            if (model.IsAccept)
             {
                 await AddFriend(new FriendModel() { IdUser1 = fr.UserSend, IdUser2 = fr.UserId });
             }
@@ -343,9 +344,9 @@ namespace WebApi.Controllers
 
         [HttpPost]
         [Route("RemoveUserFromRoom")]
-        public async Task<IHttpActionResult> RemoveUserFromRoom([FromBody] string userId, [FromBody] Guid idRoom)
+        public async Task<IHttpActionResult> RemoveUserFromRoom([FromBody]UserRoomViewModel model)
         {
-            UserJoinRoom userJoinRoom = context.UserJoinRooms.Where(t => t.UserId == userId && t.Room.Id == idRoom).First();
+            UserJoinRoom userJoinRoom = context.UserJoinRooms.Where(t => t.UserId == model.UserId && t.Room.Id == model.IdRoom).First();
             if (userJoinRoom != null)
             {
                 context.UserJoinRooms.Remove(userJoinRoom);
@@ -554,16 +555,16 @@ namespace WebApi.Controllers
         #region Block User
         [Route("BlockUser")]
         [HttpPost]
-        public async Task<IHttpActionResult> BlockUser([FromBody]string IdUser)
+        public async Task<IHttpActionResult> BlockUser([FromBody]BlockUserViewModel model)
         {
             var myUser = GetUserLogin();
-            var blockUser = context.BlockUsers.FirstOrDefault(t => t.UserID.Equals(myUser.Id) && t.UserBlockId.Equals(IdUser));
+            var blockUser = context.BlockUsers.FirstOrDefault(t => t.UserID.Equals(myUser.Id) && t.UserBlockId.Equals(model.IdUser));
             if (blockUser == null)
             {
                 BlockUser block = new BlockUser()
                 {
                     UserID = myUser.Id,
-                    UserBlockId = IdUser
+                    UserBlockId = model.IdUser
                 };
                 context.BlockUsers.Add(block);
                 await context.SaveChangesAsync();
@@ -619,21 +620,21 @@ namespace WebApi.Controllers
                 };
                 context.Rooms.Add(room);
                 await context.SaveChangesAsync();
-                await AddUserToRoom(friendModel.IdUser1, room.Id);
-                await AddUserToRoom(friendModel.IdUser2, room.Id);
+                await AddUserToRoom(new RoomViewModel() { IdUser = friendModel.IdUser1, IdRoom = room.Id });
+                await AddUserToRoom(new RoomViewModel() { IdUser = friendModel.IdUser2, IdRoom = room.Id });
             }
             return Ok();
         }
 
         [Route("RemoveFriend")]
         [HttpPost]
-        public async Task<IHttpActionResult> RemoveFriend([FromBody] string idUser2)
+        public async Task<IHttpActionResult> RemoveFriend([FromBody]BlockUserViewModel model)
         {
             var user = GetUserLogin();
             var idUser1 = user.Id;
             var friend = context.Friends
-                .FirstOrDefault(t => (t.User1Id == idUser1 && t.User2Id == idUser2)
-                        || (t.User1Id == idUser2 && t.User2Id == idUser1));
+                .FirstOrDefault(t => (t.User1Id == idUser1 && t.User2Id == model.IdUser)
+                        || (t.User1Id == model.IdUser && t.User2Id == idUser1));
             if (friend == null)
             {
                 return NotFound();
@@ -685,17 +686,17 @@ namespace WebApi.Controllers
         #region room request
         [HttpPost]
         [Route("SendRoomRequest")]
-        public async Task<IHttpActionResult> SendRoomRequest([FromBody]string user, [FromBody] string content)
+        public async Task<IHttpActionResult> SendRoomRequest([FromBody]RoomRequestViewModel model)
         {
             var myUser = GetUserLogin();
-            var roomRq = context.RoomRequests.FirstOrDefault(t => t.UserId.Equals(user) && t.UserSendID.Equals(myUser.Id));
+            var roomRq = context.RoomRequests.FirstOrDefault(t => t.UserId.Equals(model.UserId) && t.UserSendID.Equals(myUser.Id));
             if (roomRq == null)
             {
                 var rq = new RoomRequest()
                 {
                     UserSendID = myUser.Id,
-                    UserId = user,
-                    Content = content
+                    UserId = model.UserId,
+                    Content = model.Content
                 };
                 context.RoomRequests.Add(rq);
 
@@ -745,16 +746,16 @@ namespace WebApi.Controllers
         #region User Join Room
         [HttpPost]
         [Route("AddUserToRoom")]
-        public async Task<IHttpActionResult> AddUserToRoom([FromBody]string idUser, [FromBody] Guid idRoom)
+        public async Task<IHttpActionResult> AddUserToRoom([FromBody]RoomViewModel model)
         {
-            var joinExist = context.UserJoinRooms.FirstOrDefault(t => t.UserId.Equals(idUser) && t.RoomId == idRoom);
-            var user = GetUserLogin();
-            if (joinExist == null)
+            var joinExist = context.UserJoinRooms.FirstOrDefault(t => t.UserId.Equals(model.IdUser) && t.RoomId == model.IdRoom);
+            var user = context.Users.Find(model.IdUser);
+            if (joinExist == null && user != null)
             {
                 var userJoinRoom = new UserJoinRoom()
                 {
-                    UserId = idUser,
-                    RoomId = idRoom,
+                    UserId = model.IdUser,
+                    RoomId = model.IdRoom,
                     NickName = user.FullName,
                     LastInterractive = DateTime.Now
                 };
@@ -766,9 +767,9 @@ namespace WebApi.Controllers
 
         [HttpPost]
         [Route("RemoveUserRoom")]
-        public async Task<IHttpActionResult> RemoveUserRoom([FromBody] string idUser, [FromBody] Guid idRoom)
+        public async Task<IHttpActionResult> RemoveUserRoom([FromBody]RoomViewModel model)
         {
-            var joinExist = context.UserJoinRooms.FirstOrDefault(t => t.UserId.Equals(idUser) && t.RoomId == idRoom);
+            var joinExist = context.UserJoinRooms.FirstOrDefault(t => t.UserId.Equals(model.IdUser) && t.RoomId == model.IdRoom);
             if (joinExist != null)
             {
                 context.UserJoinRooms.Remove(joinExist);
@@ -801,31 +802,19 @@ namespace WebApi.Controllers
 
         [Route("GetListUserJoinRoom")]
         [HttpGet]
-        public IList<ApplicationUser> GetListUserJoinRoom([FromUri]PagingParameterModel pagingParameterModel, Guid idRoom)
+        public IList<UserJoinRoom> GetListUserJoinRoom([FromUri]PagingParameterModel pagingParameterModel)
         {
-            var listUser = new List<ApplicationUser>();
-            var listJoinRoom = context.UserJoinRooms.Where(t => t.RoomId == idRoom).Select(t => t.UserId).ToList();
-            foreach (var item in listJoinRoom)
-            {
-                var u = context.Users.Find(item);
-                listUser.Add(u);
-            }
-            int count = listUser.Count();
-
+            var user = GetUserLogin();
+            var listRoom = context.UserJoinRooms.Where(t => t.UserId.Equals(user.Id)).Select(t => t.RoomId).ToList();
+            var listJoinRoom = context.UserJoinRooms.Where(t => !t.UserId.Equals(user.Id) && listRoom.Contains(t.RoomId)).OrderBy(t => t.LastInterractive).ToList();
+            int count = listJoinRoom.Count();
             int CurrentPage = pagingParameterModel.pageNumber;
-
             int PageSize = pagingParameterModel.pageSize;
-
             int TotalCount = count;
-
             int TotalPages = (int)Math.Ceiling(count / (double)PageSize);
-
-            var items = listUser.Skip((CurrentPage - 1) * PageSize).Take(PageSize).ToList();
-
+            var items = listJoinRoom.Skip((CurrentPage - 1) * PageSize).Take(PageSize).ToList();
             var previousPage = CurrentPage > 1 ? "1" : "0";
-
             var nextPage = CurrentPage < TotalPages ? "1" : "0";
-
             var paginationMetadata = new
             {
                 totalCount = TotalCount,
@@ -841,17 +830,33 @@ namespace WebApi.Controllers
         }
         #endregion
 
+
+        [Route("GetListUserInRoom")]
+        [HttpGet]
+        public IList<ApplicationUser> GetListUserInRoom(Guid idRoom)
+        {
+            var listUser = new List<ApplicationUser>();
+            var listJoinRoom = context.UserJoinRooms.Where(t => t.RoomId == idRoom).Select(t => t.UserId).ToList();
+            foreach (var item in listJoinRoom)
+            {
+                var u = context.Users.Find(item);
+                listUser.Add(u);
+            }
+            return listUser;
+        }
+
         #region Content Chat
         [HttpPost]
         [Route("SendContentChat")]
         public async Task<IHttpActionResult> SendContentChat([FromBody]ContentChatViewModel contentChatViewModel)
         {
+            var user = GetUserLogin();
             var contentChat = new ContentChat()
             {
                 EmojiId = contentChatViewModel.EmojiId,
                 RoomId = contentChatViewModel.RoomId,
-                UserId = contentChatViewModel.UserId,
-                TimeChat = DateTime.Now
+                TimeChat = DateTime.Now,
+                UserId = user.Id
             };
 
             var ccfb = new ContentChatFB()
@@ -860,7 +865,7 @@ namespace WebApi.Controllers
                 ContentText = contentChatViewModel.ContentText,
                 Type = contentChatViewModel.Type,
                 EmojiId = contentChat.EmojiId.ToString(),
-                UserId = contentChat.UserId,
+                UserId = user.Id,
                 PathAudio = contentChatViewModel.PathAudio,
                 PathFilde = contentChatViewModel.PathFilde,
                 PathImage = contentChatViewModel.PathImage,
@@ -924,8 +929,7 @@ namespace WebApi.Controllers
                     PathImage = chat.PathImage,
                     PathVideo = chat.PathVideo,
                     RoomId = idRoom,
-                    Type = chat.Type,
-                    UserId = chat.UserId
+                    Type = chat.Type
                 };
                 result.Add(chatModel);
             }
