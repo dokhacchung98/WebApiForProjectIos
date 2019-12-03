@@ -259,6 +259,7 @@
     <Compile Include="ViewModels\ContentChatViewModel.cs" />
     <Compile Include="ViewModels\FriendModel.cs" />
     <Compile Include="ViewModels\PagingParameterModel.cs" />
+    <Compile Include="ViewModels\RepFRViewModel.cs" />
     <Compile Include="ViewModels\ReplyFriendRequestViewModel.cs" />
     <Compile Include="ViewModels\RoomRequestViewModel.cs" />
     <Compile Include="ViewModels\RoomViewModel.cs" />
@@ -298,6 +299,8 @@
     <Content Include="Areas\HelpPage\Views\Help\Api.cshtml" />
     <None Include="Properties\PublishProfiles\CustomProfile.pubxml" />
     <None Include="Properties\PublishProfiles\CustomProfile1.pubxml" />
+    <None Include="Properties\PublishProfiles\CustomProfile2.pubxml" />
+    <None Include="Properties\PublishProfiles\CustomProfile3.pubxml" />
     <None Include="Properties\PublishProfiles\FolderProfile.pubxml" />
     <None Include="Properties\PublishProfiles\somee.pubxml" />
     <None Include="Scripts\jquery-3.3.1.intellisense.js" />

@@ -15,7 +15,7 @@ namespace Entities.Models
         public virtual Room Room { get; set; }
         [ForeignKey("Room")]
         public Guid RoomId { get; set; }
-        [JsonIgnore]
+        //[JsonIgnore]
         public virtual ApplicationUser User { get; set; }
         [ForeignKey("User")]
         public string UserId { get; set; }

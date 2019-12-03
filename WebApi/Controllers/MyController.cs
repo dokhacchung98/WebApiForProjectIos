@@ -144,23 +144,24 @@ namespace WebApi.Controllers
         {
             var myUser = GetUserLogin();
             var friends = context.Friends
-            .Where(t => t.User1Id.Equals(myUser.Id) || t.User2Id.Equals(myUser.Id)).ToList();
-            var list = context.Users.Where(t => (!t.FullName.Equals("") || t.FullName != null) && !t.Id.Equals(myUser.Id) && !(friends.Any(x => x.User2Id == t.Id || x.User1Id == t.Id))).ToList();
-            foreach (var item in list)
+            .Where(t => t.User1Id == myUser.Id || t.User2Id == myUser.Id ).ToList();
+            var list = context.Users.Where(t => (!t.FullName.Equals("") && t.FullName != null)).ToList();
+
+            var list2 = new List<ApplicationUser>();
+            foreach (var f in list)
             {
-                var check = friends.Any(t => (t.User1.Equals(item.Id) && t.User2Id.Equals(myUser.Id)) || (t.User2Id.Equals(item.Id) && t.User1Id.Equals(myUser.Id)));
-                if (check)
+                if(!friends.Any(t => t.User1Id == f.Id || t.User2Id == f.Id))
                 {
-                    item.isFriend = true;
+                    list2.Add(f);
                 }
             }
 
-            int count = list.Count();
+            int count = list2.Count();
             int CurrentPage = pagingparametermodel.pageNumber;
             int PageSize = pagingparametermodel.pageSize;
             int TotalCount = count;
             int TotalPages = (int)Math.Ceiling(count / (double)PageSize);
-            var items = list.Skip((CurrentPage - 1) * PageSize).Take(PageSize).ToList();
+            var items = list2.Skip((CurrentPage - 1) * PageSize).Take(PageSize).ToList();
             var previousPage = CurrentPage > 1 ? "1" : "0";
             var nextPage = CurrentPage < TotalPages ? "1" : "0";
             var paginationMetadata = new
@@ -195,7 +196,7 @@ namespace WebApi.Controllers
             var userSend = context.FriendRequests.FirstOrDefault(t => t.UserSend.Equals(model.IdUser) && t.UserId.Equals(myUser.Id));
             if (userSend != null)
             {
-                await ReplyFriendRequest(new ReplyFriendRequestViewModel() { IdFriendRequest = userSend.Id, IsAccept = true });
+                ReplyFriendRequest(new ReplyFriendRequestViewModel() { IdFriendRequest = userSend.Id, IsAccept = true });
                 return Ok();
             }
 
@@ -226,36 +227,53 @@ namespace WebApi.Controllers
 
         [Route("DeleteFriendRequest")]
         [HttpGet]
-        public async Task<IHttpActionResult> DeleteFriendRequest([FromUri]Guid id)
+        public  IHttpActionResult DeleteFriendRequest([FromUri]Guid id)
         {
             var fRequest = context.FriendRequests.FirstOrDefault(t => t.Id == id);
             if (fRequest != null)
             {
-                await firebaseClient.Child(FRIEND_REQUEST)
+                firebaseClient.Child(FRIEND_REQUEST)
                     .Child(id.ToString())
                     .DeleteAsync();
                 context.FriendRequests.Remove(fRequest);
-                await context.SaveChangesAsync();
+                context.SaveChanges();
             }
             return Ok();
         }
 
         [Route("ReplyFriendRequest")]
         [HttpPost]
-        public async Task<IHttpActionResult> ReplyFriendRequest([FromBody]ReplyFriendRequestViewModel model)
+        public IHttpActionResult ReplyFriendRequest([FromBody]ReplyFriendRequestViewModel model)
         {
-            var fr = context.FriendRequests.Find(model.IdFriendRequest);
+            var fr = context.FriendRequests.FirstOrDefault(t => t.Id == model.IdFriendRequest);
             if (fr == null)
             {
                 return NotFound();
             }
-            if (model.IsAccept)
+            DeleteFriendRequest(fr.Id);
+            if (model.IsAccept == true)
             {
-                await AddFriend(new FriendModel() { IdUser1 = fr.UserSend, IdUser2 = fr.UserId });
+                AddFriend(new FriendModel() { IdUser1 = fr.UserSend, IdUser2 = fr.UserId });
             }
-            await DeleteFriendRequest(fr.Id);
-            await context.SaveChangesAsync();
-            return Ok();
+            return Ok(model);
+        }
+
+        [Route("ReplyFR")]
+        [HttpPost]
+        public IHttpActionResult ReplyFR([FromBody]RepFRViewModel model)
+        {
+            var fr = context.FriendRequests.Find(model.Id);
+            if (fr == null)
+            {
+                return NotFound();
+            }
+            if (model.Accept == 1)
+            {
+                AddFriend(new FriendModel() { IdUser1 = fr.UserSend, IdUser2 = fr.UserId });
+            }
+            DeleteFriendRequest(fr.Id);
+
+            return Ok(model);
         }
 
         [HttpGet]
@@ -598,7 +616,7 @@ namespace WebApi.Controllers
         #region Friend
         [Route("AddFriend")]
         [HttpPost]
-        public async Task<IHttpActionResult> AddFriend(FriendModel friendModel)
+        public IHttpActionResult AddFriend(FriendModel friendModel)
         {
             var userExist = context.Friends.FirstOrDefault(t => (t.User1Id.Equals(friendModel.IdUser1) && t.User2Id.Equals(friendModel.IdUser2))
             || (t.User1Id.Equals(friendModel.IdUser2) && t.User2Id.Equals(friendModel.IdUser1)));
@@ -610,6 +628,7 @@ namespace WebApi.Controllers
                     User2Id = friendModel.IdUser2
                 };
                 context.Friends.Add(friend);
+                context.SaveChanges();
 
                 Room room = new Room()
                 {
@@ -619,11 +638,12 @@ namespace WebApi.Controllers
                     NameRoom = ""
                 };
                 context.Rooms.Add(room);
-                await context.SaveChangesAsync();
-                await AddUserToRoom(new RoomViewModel() { IdUser = friendModel.IdUser1, IdRoom = room.Id });
-                await AddUserToRoom(new RoomViewModel() { IdUser = friendModel.IdUser2, IdRoom = room.Id });
+                context.SaveChanges();
+                AddUserToRoom(new RoomViewModel() { IdUser = friendModel.IdUser1, IdRoom = room.Id });
+                AddUserToRoom(new RoomViewModel() { IdUser = friendModel.IdUser2, IdRoom = room.Id });
+                return Ok();
             }
-            return Ok();
+            return BadRequest();
         }
 
         [Route("RemoveFriend")]
@@ -746,7 +766,7 @@ namespace WebApi.Controllers
         #region User Join Room
         [HttpPost]
         [Route("AddUserToRoom")]
-        public async Task<IHttpActionResult> AddUserToRoom([FromBody]RoomViewModel model)
+        public IHttpActionResult AddUserToRoom([FromBody]RoomViewModel model)
         {
             var joinExist = context.UserJoinRooms.FirstOrDefault(t => t.UserId.Equals(model.IdUser) && t.RoomId == model.IdRoom);
             var user = context.Users.Find(model.IdUser);
@@ -760,7 +780,7 @@ namespace WebApi.Controllers
                     LastInterractive = DateTime.Now
                 };
                 context.UserJoinRooms.Add(userJoinRoom);
-                await context.SaveChangesAsync();
+                context.SaveChanges();
             }
             return Ok();
         }
